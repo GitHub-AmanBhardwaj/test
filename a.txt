@@ -134,29 +134,112 @@ ANSWER:
     
     return answer, source_titles, metrics
 
-# --- INTERACTIVE LOOP ---
+# --- AUTOMATED BENCHMARKING LOOP WITH LOGGING ---
 if __name__ == "__main__":
-    while True:
-        user_query = input("\nAsk a research question (or type 'quit' to exit): ")
-        if user_query.lower() == 'quit':
-            break
+    import numpy as np
+    import os
+
+    # 1. Define your exact 18 evaluation queries here
+    test_queries = [
+        # C1 - Effective and commonly used models
+        "What are effective and commonly used models in speech recognition?",
+        "What are effective and commonly used models in computer vision?",
+        "What are effective and commonly used models in NLP?",
+    
+        # C2 - Key challenges
+        "What are the key challenges in speech recognition?",
+        "What are the key challenges in computer vision?",
+        "What are the key challenges in NLP?",
+    
+        # C3 - Future directions and research trends
+        "What are the future directions and research trends in speech recognition?",
+        "What are the future directions and research trends in computer vision?",
+        "What are the future directions and research trends in NLP?",
+    
+        # C4 - Hyperparameter tuning
+        "How is hyperparameter tuning performed in speech recognition models?",
+        "How is hyperparameter tuning performed in computer vision models?",
+        "How is hyperparameter tuning performed in NLP models?",
+    
+        # C5 - Tools and frameworks
+        "What tools and frameworks are commonly used for speech recognition?",
+        "What tools and frameworks are commonly used for computer vision?",
+        "What tools and frameworks are commonly used for NLP?",
+    
+        # C6 - Testing and validation methods
+        "What testing and validation methods are used in speech recognition?",
+        "What testing and validation methods are used in computer vision?",
+        "What testing and validation methods are used in NLP?"
+    ]
+
+    output_filename = "benchmark_results_v1.txt"
+    
+    print(f"\nStarting Automated Benchmark over {len(test_queries)} queries...")
+    print(f"Results will be saved to: {output_filename}")
+
+    # Storage for metric aggregation
+    all_retrieval_latency = []
+    all_generation_latency = []
+    all_total_runtime = []
+    all_throughput = []
+    all_peak_vram = []
+
+    # Warm-up query (to load CUDA kernels, excluded from data)
+    print("Running warm-up query to initialize GPU caches...")
+    _ = ask_question("What is artificial intelligence?", max_new_tokens=10)
+
+    # Open file to write results
+    with open(output_filename, "w", encoding="utf-8") as f:
+        f.write("================ V1 BENCHMARK RESULTS ================\n\n")
+
+        # 2. Actual Benchmark Loop
+        for idx, query in enumerate(test_queries):
+            print(f"\nProcessing Query {idx + 1}/{len(test_queries)}: {query}")
+            
+            # Run the query
+            answer, sources, metrics = ask_question(query, max_new_tokens=512)
+            
+            # Store metrics
+            all_retrieval_latency.append(metrics["retrieval_latency_ms"])
+            all_generation_latency.append(metrics["generation_latency_s"])
+            all_total_runtime.append(metrics["total_runtime_s"])
+            all_throughput.append(metrics["throughput_tokens_per_s"])
+            all_peak_vram.append(metrics["peak_vram_gb"])
+
+            # Write individual query results to the file
+            f.write(f"--- Query {idx + 1}/{len(test_queries)} ---\n")
+            f.write(f"Question: {query}\n")
+            f.write(f"Retrieval Latency      : {metrics['retrieval_latency_ms']:.2f} ms\n")
+            f.write(f"Generation Latency     : {metrics['generation_latency_s']:.2f} s\n")
+            f.write(f"Total Runtime          : {metrics['total_runtime_s']:.2f} s\n")
+            f.write(f"Tokens Generated       : {metrics['tokens_generated']}\n")
+            f.write(f"Throughput             : {metrics['throughput_tokens_per_s']:.2f} tokens/s\n")
+            f.write(f"Peak VRAM              : {metrics['peak_vram_gb']:.2f} GB\n")
+            f.write("\n")
+
+        # 3. Calculate Final Averages and Standard Deviations
+        f.write("================ FINAL AGGREGATED STATISTICS ================\n")
         
-        answer, sources, benchmarking = ask_question(user_query)
+        # Averages
+        avg_ret = np.mean(all_retrieval_latency)
+        avg_gen = np.mean(all_generation_latency)
+        avg_tot = np.mean(all_total_runtime)
+        avg_thr = np.mean(all_throughput)
+        avg_vrm = np.mean(all_peak_vram)
         
-        print("\n--- Generated Answer ---")
-        print(textwrap.fill(answer, width=100))
+        # Standard Deviations
+        std_ret = np.std(all_retrieval_latency)
+        std_gen = np.std(all_generation_latency)
+        std_tot = np.std(all_total_runtime)
+        std_thr = np.std(all_throughput)
+        std_vrm = np.std(all_peak_vram)
+
+        # Write Summary to File
+        f.write(f"Retrieval Latency   | Mean: {avg_ret:.2f} ms     | StdDev: {std_ret:.2f} ms\n")
+        f.write(f"Generation Latency  | Mean: {avg_gen:.2f} s      | StdDev: {std_gen:.2f} s\n")
+        f.write(f"Total Runtime       | Mean: {avg_tot:.2f} s      | StdDev: {std_tot:.2f} s\n")
+        f.write(f"Throughput          | Mean: {avg_thr:.2f} tok/s  | StdDev: {std_thr:.2f} tok/s\n")
+        f.write(f"Peak VRAM           | Mean: {avg_vrm:.2f} GB     | StdDev: {std_vrm:.2f} GB\n")
+        f.write("=============================================================\n")
         
-        if sources:
-            print("\n--- Sources Used ---")
-            for title in sources:
-                print(f"- {title}")
-                
-        # --- BENCHMARK ADDITION: Runtime Metric Reporting Dashboard ---
-        print("\n================ COMPUTE BENCHMARKING REPORT ================")
-        print(f"Retrieval Latency       : {benchmarking.get('retrieval_latency_ms', 0):.2f} ms")
-        print(f"Generation Latency      : {benchmarking.get('generation_latency_s', 0):.2f} seconds")
-        print(f"Total Response Runtime  : {benchmarking.get('total_runtime_s', 0):.2f} seconds")
-        print(f"Tokens Generated        : {benchmarking.get('tokens_generated', 0)} tokens")
-        print(f"Generation Throughput   : {benchmarking.get('throughput_tokens_per_s', 0):.2f} tokens/second")
-        print(f"Peak Runtime GPU VRAM   : {benchmarking.get('peak_vram_gb', 0):.2f} GB")
-        print("=============================================================")
+    print(f"\nBenchmarking complete! Results saved to {os.path.abspath(output_filename)}")
