@@ -1,10 +1,9 @@
-from flask import Flask
+from flask import Flask, render_template
 
 app = Flask(__name__)
 
 @app.route('/')
 def hello():
-    return "<h1>Hello from Flask on Vercel!</h1><p>Deployment is working successfully.</p>"
-
+    return render_template('home.html')
 if __name__ == '__main__':
     app.run()
